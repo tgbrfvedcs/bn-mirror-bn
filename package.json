@@ -1,0 +1,24 @@
+{
+  "name": "bn-mir-bn",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bitmex-realtime-api": "^0.4.0",
+    "ccxt": "^1.24.25",
+    "chalk": "^2.4.2",
+    "crypto-js": "^3.1.9-1",
+    "i": "^0.3.6",
+    "node-binance-api": "^0.10.0",
+    "npm": "^6.13.6",
+    "request": "^2.88.0",
+    "request-promise": "^4.2.4",
+    "telegraf": "^3.36.0"
+  }
+}
