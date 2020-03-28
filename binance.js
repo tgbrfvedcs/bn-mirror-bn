@@ -59,11 +59,13 @@ module.exports = class Mirror extends ccxt {
     try {
       const balance = await this._get_USDT_balance();
       // const tempPostition = await this.fapiPrivateGetPositionRisk()
-      const { positionAmt, entryPrice } = (
-        await this.fapiPrivateGetPositionRisk()
-      ).find(e => e.symbol === 'BTCUSDT');
+      const BTCposition = (await this.fapiPrivateGetPositionRisk()).find(
+        e => e.symbol === "BTCUSDT"
+      );
+      if (!BTCposition) return 0;
+      const { positionAmt, entryPrice } = BTCposition;
       // debugger;
-      return positionAmt / (balance / entryPrice);
+      return {status:positionAmt / (balance / entryPrice), balance};
     } catch (e) {
       // await getAccountDraft();
       console.log(e);
@@ -87,9 +89,10 @@ module.exports = class Mirror extends ccxt {
       // sell: total * percent / pr.bid
       const totalAccountValueBTC = balance / ask;
       console.log('ask: ', ask);
-      const currentPosition = (await this.fapiPrivateGetPositionRisk()).find(
+      let currentPosition = (await this.fapiPrivateGetPositionRisk()).find(
         e => e.symbol === 'BTCUSDT'
-      ).positionAmt;
+      )
+      currentPosition = currentPosition ? Number(currentPosition.positionAmt) : 0;
 
       const targetAmount = srcPositionPercent * totalAccountValueBTC;
       const targetGapFTXpostMirroOrder =
