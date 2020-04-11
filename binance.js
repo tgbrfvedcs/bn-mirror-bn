@@ -1,6 +1,20 @@
 const ccxt = require('ccxt').binance;
 // const cfg = require('./config');
 // class Mirror extends ccxt {
+const winston = require('winston');
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.json(),
+  // defaultMeta: { service: 'user-service' },
+  transports: [
+    //
+    // - Write to all logs with level `info` and below to `combined.log` 
+    // - Write all logs error (and below) to `error.log`.
+    //
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' })
+  ]
+});
 module.exports = class Mirror extends ccxt {
   constructor(workerInfo) {
     super({
@@ -63,12 +77,15 @@ module.exports = class Mirror extends ccxt {
         e => e.symbol === "BTCUSDT"
       );
       if (!BTCposition) return 0;
-      const { positionAmt, entryPrice } = BTCposition;
+      const { positionAmt, entryPrice, unRealizedProfit } = BTCposition;
+      logger.info(`${Date.now()}, ${new Date().toLocaleString()}, balance:${balance}`);
+      logger.info(BTCposition);
       // debugger;
-      return {status:positionAmt / (balance / entryPrice), balance};
+      return {status:positionAmt / (balance / entryPrice), balance, unRealizedProfit};
     } catch (e) {
       // await getAccountDraft();
-      console.log(e);
+      console.error(e);
+      logger.error(BTCposition);
       return;
     }
   }
@@ -101,6 +118,8 @@ module.exports = class Mirror extends ccxt {
       // const postDraft = await postOrder(targetGapFTXpostMirroOrder);
       debugger;
       const data = await this._postOrder(targetGapFTXpostMirroOrder.toFixed(3));
+      logger.info(`_postOrder ${Date.now()}, ${new Date().toLocaleString()}`);
+      logger.info(data);
       console.log(`${data.side ? 'Success!' : 'Failed'}
   Side: ${data.side}
   Size: ${data.origQty}
@@ -125,6 +144,8 @@ module.exports = class Mirror extends ccxt {
       ).positionAmt;
       // debugger;
       const offset = await this._postOrder(currentPosition, 'offset');
+      logger.info(`_postOrder ${Date.now()}, ${new Date().toLocaleString()}`);
+      logger.info(data);
       if (!offset) {
         return console.log('No need to offset');
       }

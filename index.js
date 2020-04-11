@@ -2,12 +2,30 @@ const Mirror = require("./mirror");
 const Telegram = require("telegraf/telegram");
 const bot = new Telegram("1096247066:AAFDfT9KrS7jBdjibleDdZ3CFG5-ThmYR6s");
 const devGroup = "-353674398";
+const winston = require('winston');
 
 const Binance = require("./binance");
 const src = new Binance({
   key: "ir2CfEX20kNVJoMq5IAkA70kkUpIfOPE5F5ciHwmoRlPXwKfbCLthWWuFdw06HmP",
   sec: "7HD7ihkPhPGnb16XVt5Lh8jdYfLEo5gZpwD5QQSQfdRBepYi3eqlYX9bY4ZQzErL"
 });
+
+
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.json(),
+  // defaultMeta: { service: 'user-service' },
+  transports: [
+    //
+    // - Write to all logs with level `info` and below to `combined.log` 
+    // - Write all logs error (and below) to `error.log`.
+    //
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' })
+  ]
+});
+
+
 
 // 所有API都存在這裡
 const cfg = require("./config.json");
@@ -16,6 +34,7 @@ const listWorkers = [];
 const users = [];
 
 let srcLastTradeId = 0;
+let getSrcTradesCount = 20;
 
 for (let i = 0; i < cfg.workers.length; i++) {
   const workerInfo = cfg.workers[i];
@@ -32,7 +51,11 @@ const getAllWorkersPosition = async () => {
     list.push(listWorkers[i].binance._getStatus());
   }
   const result = await Promise.all(list);
-  users.forEach((e, i) => (e.balance = result[i].balance));
+  users.forEach((e,i) =>{
+    e.balance = result[i].balance;
+    e.unRealizedProfit = result[i].unRealizedProfit;
+    return
+  });
   return result.map(e => e.status);
 };
 
@@ -54,16 +77,16 @@ const syncAllWorkersToSrc = async (srcPosition, allWorkersInTolerance) => {
     }
     if (!list.length) return;
     const result = await Promise.all(list);
-    console.log("syncAllWorkersToSrc -> result", result);
+    // console.log("syncAllWorkersToSrc -> result", result);
   }
 };
 
 const getSrcTrades = async () => {
   const fapiPrivate_get_allorders = await src.fapiPrivate_get_allorders({
     symbol: "BTCUSDT",
-    limit: 20
+    limit: getSrcTradesCount
   });
-  // console.log("fapiPrivate_get_allorders", fapiPrivate_get_allorders);
+  // console.log(Date.now());
   return fapiPrivate_get_allorders;
 };
 
@@ -103,16 +126,24 @@ const getIncomess = async () => {
   return msg;
 };
 
-const genStatusResp = (allWorkersPosition, srcPosition) => {
+const roundToTwo = (num) => {
+  return +(Math.round(num + "e+3")  + "e-3");
+}
+
+const genStatusResp = (allWorkersPosition, { status, unRealizedProfit }) => {
+  let srcPosition = status;
   // console.log("genStatusResp -> listWorkers", listWorkers)
-  let msg = `Head position: ${srcPosition}
-  --------------------------------------------
-  `;
+  let msg = `Head position: ${roundToTwo(srcPosition)}
+--------------------------------------------
+`;
   for (let i in listWorkers) {
     msg =
       msg +
-      `Name: ${users[i].name},  Balance: ${users[i].balance}
-Leverage: ${users[i].leverage},  Position: ${allWorkersPosition[i]}
+      `Name: ${users[i].name},  
+Balance: ${roundToTwo(users[i].balance)},
+unRealizedProfit: ${roundToTwo(users[i].unRealizedProfit)},
+Leverage: ${users[i].leverage},  Position: ${roundToTwo(allWorkersPosition[i])}
+
 `;
   }
   return msg;
@@ -122,16 +153,16 @@ const monitoring = async () => {
   if (srcPosition === undefined || srcPosition === null) {
     srcPosition = await src._getStatus();
   }
-  srcPosition = srcPosition.status;
+  // srcPosition = srcPosition.status;
   console.log("srcPosition", srcPosition);
   // 2. Get ends status(Promise.all)
   let allWorkersPosition = await getAllWorkersPosition();
   // 3. Check if ends in src's tolarance (side & percent)
 
   let allWorkersInTolerance = [];
-  if (srcPosition !== null) {
+  if (srcPosition && srcPosition.status) {
     allWorkersInTolerance = await checkAllWorkersInTolerance(
-      srcPosition,
+      srcPosition.status,
       allWorkersPosition
     );
   }
@@ -143,101 +174,89 @@ const monitoring = async () => {
   ) {
   } else {
     msg = `===SOMETHING WRONG...===
-  ${msg}
-  ===SOMETHING WRONG...===`;
+${msg}
+===SOMETHING WRONG...===`;
   }
   bot.sendMessage(devGroup, msg);
+};
+
+const runCheckProcesses = async () => {
+  console.log(new Date().toLocaleString());
+  console.log(Date.now());
+  // 1. Get src status
+  let srcPosition = await src._getStatus();
+  srcPosition = srcPosition.status;
+  console.log("srcPosition", srcPosition);
+
+  let p2 = getTime();
+  // 2. Get ends status(Promise.all)
+  let allWorkersPosition = await getAllWorkersPosition();
+  console.log("getAllWorkersPosition", getTimeDIff(p2));
+
+  // 3. Check if ends in src's tolerance (side & percent)
+  let allWorkersInTolerance = await checkAllWorkersInTolerance(
+    srcPosition,
+    allWorkersPosition
+  );
+
+  let p3f = getTime();
+  //    -false--> All ends sync to src status
+  let syncWorkersToSrc = await syncAllWorkersToSrc(
+    srcPosition,
+    allWorkersInTolerance
+  );
+  console.log("syncAllWorkersToSrc(p3f)", getTimeDIff(p3f));
 };
 
 async function checker() {
   try {
     let srcTrades = await getSrcTrades();
-    if (srcTrades[srcTrades.length - 1].orderId !== srcLastTradeId) {
-      console.log(new Date().toLocaleString())
-      // 1. Get src status
-      let srcPosition = await src._getStatus();
-      srcPosition = srcPosition.status;
-      console.log("srcPosition", srcPosition);
-
-      let p2 = getTime();
-      // 2. Get ends status(Promise.all)
-      let allWorkersPosition = await getAllWorkersPosition();
-      console.log("getAllWorkersPosition", getTimeDIff(p2));
-
-      let p3 = getTime();
-
-      // 3. Check if ends in src's tolarance (side & percent)
-      let allWorkersInTolerance = await checkAllWorkersInTolerance(
-        srcPosition,
-        allWorkersPosition
-      );
-
-      let p3f = getTime();
-      //    -false--> All ends sync to src status
-      let syncWorkersToSrc = await syncAllWorkersToSrc(
-        srcPosition,
-        allWorkersInTolerance
-      );
-      console.log("syncAllWorkersToSrc(p3f)", getTimeDIff(p3f));
-
-      srcLastTradeId = srcTrades.pop().orderId;
+    let lastIndex = srcTrades.findIndex((e) => e.orderId === srcLastTradeId);
+    if (lastIndex !== getSrcTradesCount - 1) {
+      logger.info(`${Date.now()}, ${new Date().toLocaleString()}`);
+      logger.info(`fapiPrivate_get_allorders`,srcTrades);
+      if (srcTrades[lastIndex + 1].status !== "FILLED") return;
+      await runCheckProcesses();
+      srcLastTradeId = srcTrades[lastIndex + 1].orderId;
       monitoring();
     }
   } catch (error) {
     console.log(error);
   }
-  // const checker = async srcLastTradeId => {
 }
+
 const getTime = () => {
   return Date.now();
 };
 const getTimeDIff = t => {
   return Date.now() - t;
 };
-(async () => {
-  try {
-    console.log(new Date().toLocaleString())
-    let p1 = getTime();
-    // 1. Get src status
-    let srcPosition = await src._getStatus();
-    srcPosition = srcPosition.status;
-    console.log("srcPosition", srcPosition);
 
-    // let getIncomesds = await getIncomess();
-    let p2 = getTime();
-    // 2. Get ends status(Promise.all)
-    let allWorkersPosition = await getAllWorkersPosition();
-
-    console.log("getAllWorkersPosition", getTimeDIff(p2));
-
-    let p3 = getTime();
-    // 3. Check if ends in src's tolarance (side & percent)
-    let allWorkersInTolerance = await checkAllWorkersInTolerance(
-      srcPosition,
-      allWorkersPosition
-    );
-
-    let p3f = getTime();
-    //    -false--> All ends sync to src status
-    let syncWorkersToSrc = await syncAllWorkersToSrc(
-      srcPosition,
-      allWorkersInTolerance
-    );
-
-    console.log("syncAllWorkersToSrc(p3f)", getTimeDIff(p3f));
-
-    let p4 = getTime();
+const initLastTrade = async() =>{
     // 4. Get src trades from src allorders
     let srcTrades = await getSrcTrades();
-
-    let p5 = getTime();
+    logger.info(`initLastTrade ${Date.now()}, ${new Date().toLocaleString()}`);
+    logger.info(`fapiPrivate_get_allorders`,srcTrades);
     // 5. Save last trades id in memory.
-    srcLastTradeId = srcTrades.pop().orderId;
+    let lastStatus = null;
+    let lastTrade = null;
+    while(lastStatus !== 'FILLED'){
+      lastTrade = srcTrades.pop();
+      lastStatus = lastTrade.status;
+    }
+    return lastTrade.orderId;
+}
 
+(async () => {
+  try {
+    await runCheckProcesses();
+    // 4. Get src trades from src allorders
+    // 5. Save last trades id in memory.
+    srcLastTradeId = await initLastTrade();
+    // monitoring();
     // 6. Loop check if src has new order(last trade isn't the saved one)
     //    -true--> do step 1, 2(Promise.all), 3.false
     setInterval(checker, 6000);
-    // debugger;
   } catch (error) {
     console.log(error);
   }
