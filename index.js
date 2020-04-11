@@ -14,12 +14,7 @@ const src = new Binance({
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.json(),
-  // defaultMeta: { service: 'user-service' },
   transports: [
-    //
-    // - Write to all logs with level `info` and below to `combined.log` 
-    // - Write all logs error (and below) to `error.log`.
-    //
     new winston.transports.File({ filename: 'error.log', level: 'error' }),
     new winston.transports.File({ filename: 'combined.log' })
   ]
@@ -35,6 +30,7 @@ const users = [];
 
 let srcLastTradeId = 0;
 let getSrcTradesCount = 20;
+let lastMinuteCheck = Date.now();
 
 for (let i = 0; i < cfg.workers.length; i++) {
   const workerInfo = cfg.workers[i];
@@ -206,7 +202,18 @@ const runCheckProcesses = async () => {
     allWorkersInTolerance
   );
   console.log("syncAllWorkersToSrc(p3f)", getTimeDIff(p3f));
+  return allWorkersInTolerance;
 };
+
+const minuteCheck = () => {
+  const interval = 1 * 1000 * 30;
+  const now = Date.now();
+  if(now - lastMinuteCheck > interval){
+    lastMinuteCheck = now;
+    return true;
+  }
+  return false;
+}
 
 async function checker() {
   try {
@@ -219,6 +226,13 @@ async function checker() {
       await runCheckProcesses();
       srcLastTradeId = srcTrades[lastIndex + 1].orderId;
       monitoring();
+    }else if(minuteCheck()){
+      let tolerance = await runCheckProcesses();
+      if(tolerance.includes(false)){
+        logger.info(`${Date.now()}, ${new Date().toLocaleString()}`);
+        logger.info(`fapiPrivate_get_allorders`,srcTrades);
+        monitoring();
+      }
     }
   } catch (error) {
     console.log(error);
