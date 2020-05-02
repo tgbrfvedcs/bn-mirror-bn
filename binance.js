@@ -85,7 +85,7 @@ module.exports = class Mirror extends ccxt {
     } catch (e) {
       // await getAccountDraft();
       console.error(e);
-      logger.error(BTCposition);
+      logger.error(e);
       return;
     }
   }
@@ -145,7 +145,6 @@ module.exports = class Mirror extends ccxt {
       // debugger;
       const offset = await this._postOrder(currentPosition, 'offset');
       logger.info(`_postOrder ${Date.now()}, ${new Date().toLocaleString()}`);
-      logger.info(data);
       if (!offset) {
         return console.log('No need to offset');
       }
