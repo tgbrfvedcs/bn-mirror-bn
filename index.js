@@ -71,10 +71,11 @@ const syncAllWorkersToSrc = async (srcPosition, allWorkersInTolerance) => {
     if (allWorkersInTolerance[i] === false) {
       list.push(listWorkers[i].mirrorToTarget(srcPosition));
     }
+  }
     if (!list.length) return;
     const result = await Promise.all(list);
     // console.log("syncAllWorkersToSrc -> result", result);
-  }
+  
 };
 
 const getSrcTrades = async () => {
