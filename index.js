@@ -79,7 +79,7 @@ const checkBalanceHealth = (user) => {
   const health_rate = 0.73;
 
   const health_line = health_rate * initialFund;
-  const current_health = balance + unRealizedProfit;
+  const current_health = Number(balance) + Number(unRealizedProfit);
   return current_health > health_line;
 }
 
