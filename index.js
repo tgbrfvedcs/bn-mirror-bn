@@ -34,7 +34,7 @@ let lastMinuteCheck = Date.now();
 
 for (let i = 0; i < cfg.workers.length; i++) {
   const workerInfo = cfg.workers[i];
-  users.push({ name: workerInfo.name, leverage: workerInfo.leverage });
+  users.push({ name: workerInfo.name, leverage: workerInfo.leverage, initialFund: workerInfo.initialFund });
   listWorkers.push(new Mirror(workerInfo));
 }
 users.forEach(user => {
@@ -50,10 +50,38 @@ const getAllWorkersPosition = async () => {
   users.forEach((e,i) =>{
     e.balance = result[i].balance;
     e.unRealizedProfit = result[i].unRealizedProfit;
+    if(!e.initialFund) return
+    
+    let is_healthy = checkBalanceHealth(e);
+    if(!is_healthy){
+      listWorkers[i].binance._offset()
+      warnUnhealthy(Object.assign({}, e));
+      removeUserAndWorkerByName(e.name);
+    }
     return
   });
   return result.map(e => e.status);
 };
+
+const warnUnhealthy = (user) => {
+  let msg = `移除" ${user.name}"  餘額: ${user.balance},  訊息: 餘額過低`
+  bot.sendMessage(devGroup, msg);
+}
+
+const removeUserAndWorkerByName = (name) => {
+  const userIndex = users.findIndex((user) => user.name === name);
+  listWorkers.splice(userIndex, 1);
+  users.splice(userIndex, 1);
+}
+
+const checkBalanceHealth = (user) => {
+  const {balance, unRealizedProfit, initialFund} = user;
+  const health_rate = 0.73;
+
+  const health_line = health_rate * initialFund;
+  const current_health = balance + unRealizedProfit;
+  return current_health > health_line;
+}
 
 const checkAllWorkersInTolerance = async (srcPosition, allWorkersPosition) => {
   const list = [];

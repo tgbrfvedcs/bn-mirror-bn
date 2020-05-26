@@ -9,6 +9,7 @@ module.exports = class Mirror {
     this.walletAmount = 0;
     //positionPercent 必須相同
     this.srcPositionPercent = 0;
+    this.name = workerInfo.name;
     this.leverage = workerInfo.leverage;
     this.srcDir = 0;
     this.positionQuantity = -Infinity;
