@@ -16,7 +16,7 @@
     "crypto-js": "^3.1.9-1",
     "i": "^0.3.6",
     "node-binance-api": "^0.10.0",
-    "npm": "^6.13.6",
+    "npm": "^6.14.6",
     "request": "^2.88.0",
     "request-promise": "^4.2.4",
     "telegraf": "^3.36.0",
